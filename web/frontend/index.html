@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>sqlan — SQL依存関係アナライザー</title>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; background: #1a1a2e; color: #e0e0e0; }
+    #header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #16213e; border-bottom: 1px solid #0f3460; }
+    #header h1 { font-size: 1.1rem; color: #e94560; }
+    #search { padding: 6px 10px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; width: 220px; }
+    #filter-op { padding: 6px 8px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; }
+    #layout-sel { padding: 6px 8px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; }
+    #btn-analyze { padding: 6px 16px; border-radius: 4px; border: none; background: #e94560; color: #fff; cursor: pointer; margin-left: auto; }
+    #btn-analyze:disabled { opacity: 0.5; cursor: default; }
+    #progress-bar { height: 3px; background: #e94560; width: 0%; transition: width 0.3s; }
+    #main { display: flex; flex: 1; overflow: hidden; }
+    #cy { flex: 1; }
+    #detail { width: 280px; background: #16213e; border-left: 1px solid #0f3460; padding: 16px; overflow-y: auto; }
+    #detail h2 { font-size: 0.9rem; color: #e94560; margin-bottom: 12px; }
+    .detail-row { margin-bottom: 8px; font-size: 0.82rem; }
+    .detail-label { color: #888; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 2px; }
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem; }
+    .badge-select { background: #1a6b4a; } .badge-update { background: #6b3a1a; } .badge-insert { background: #1a3a6b; } .badge-unknown { background: #444; }
+    .badge-table { background: #2d1b6b; } .badge-fk { background: #1a5c6b; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>sqlan</h1>
+    <input id="search" type="text" placeholder="テーブル名 / SQLファイル名で絞り込み">
+    <select id="filter-op">
+      <option value="">すべての操作</option>
+      <option value="SELECT">SELECT</option>
+      <option value="UPDATE">UPDATE</option>
+      <option value="INSERT">INSERT</option>
+      <option value="WRITE">WRITE</option>
+    </select>
+    <select id="layout-sel">
+      <option value="cose">force-directed</option>
+      <option value="breadthfirst">階層型</option>
+      <option value="grid">グリッド</option>
+      <option value="circle">円形</option>
+    </select>
+    <button id="btn-analyze">解析実行</button>
+  </div>
+  <div id="progress-bar"></div>
+  <div id="main">
+    <div id="cy"></div>
+    <div id="detail">
+      <h2>詳細</h2>
+      <div id="detail-body" style="color:#666;font-size:0.82rem;">ノードをクリックしてください</div>
+    </div>
+  </div>
+  <script>
+    let cy = null;
+    let currentJobId = null;
+    let pollTimer = null;
+
+    const $ = id => document.getElementById(id);
+
+    function initCytoscape(elements) {
+      if (cy) cy.destroy();
+      cy = cytoscape({
+        container: $('cy'),
+        elements,
+        style: [
+          { selector: 'node[type="table"]', style: { 'background-color': '#4a2d8b', 'label': 'data(label)', 'color': '#fff', 'font-size': '11px', 'text-valign': 'center', 'width': '60px', 'height': '60px', 'shape': 'ellipse' } },
+          { selector: 'node[type="sql_file"]', style: { 'background-color': '#2d6b4a', 'label': 'data(label)', 'color': '#fff', 'font-size': '9px', 'text-valign': 'center', 'shape': 'rectangle', 'width': '80px', 'height': '30px' } },
+          { selector: 'edge[type="join"]', style: { 'line-color': '#e94560', 'width': 2, 'target-arrow-shape': 'none', 'curve-style': 'bezier' } },
+          { selector: 'edge[type="join"][has_fk]', style: { 'line-style': 'solid' } },
+          { selector: 'edge[type="read"]', style: { 'line-color': '#4a8b6b', 'width': 1, 'target-arrow-shape': 'triangle', 'target-arrow-color': '#4a8b6b', 'curve-style': 'bezier' } },
+          { selector: 'edge[type="write"]', style: { 'line-color': '#e9a020', 'width': 1, 'target-arrow-shape': 'triangle', 'target-arrow-color': '#e9a020', 'curve-style': 'bezier' } },
+          { selector: ':selected', style: { 'border-width': 3, 'border-color': '#fff' } },
+        ],
+        layout: { name: $('layout-sel').value, padding: 40 },
+      });
+      cy.on('tap', 'node', e => showDetail(e.target.data()));
+      cy.on('tap', 'edge', e => showEdgeDetail(e.target.data()));
+    }
+
+    function showDetail(data) {
+      const op = data.operation || '';
+      const badgeClass = { SELECT: 'badge-select', UPDATE: 'badge-update', INSERT: 'badge-insert' }[op] || 'badge-unknown';
+      let html = '';
+      if (data.type === 'table') {
+        html = `
+          <div class="detail-row"><div class="detail-label">種別</div><span class="badge badge-table">テーブル</span></div>
+          <div class="detail-row"><div class="detail-label">名前</div>${data.label}</div>
+          <div class="detail-row"><div class="detail-label">行数</div>${data.row_count >= 0 ? data.row_count.toLocaleString() : '不明'}</div>
+          <div class="detail-row"><div class="detail-label">参照SQLファイル数</div>${data.sql_file_count}</div>
+          <div class="detail-row"><div class="detail-label">カラム</div>${(data.columns || []).join(', ') || '不明'}</div>`;
+      } else {
+        html = `
+          <div class="detail-row"><div class="detail-label">種別</div>SQLファイル</div>
+          <div class="detail-row"><div class="detail-label">ファイル名</div>${data.label}</div>
+          <div class="detail-row"><div class="detail-label">操作</div><span class="badge ${badgeClass}">${op}</span></div>
+          <div class="detail-row"><div class="detail-label">呼び出しクラス</div>${data.calling_class || '不明'}</div>
+          <div class="detail-row"><div class="detail-label">呼び出しメソッド</div>${data.calling_method || '不明'}</div>
+          <div class="detail-row"><div class="detail-label">パス</div><small>${data.sql_file || ''}</small></div>`;
+      }
+      $('detail-body').innerHTML = html;
+    }
+
+    function showEdgeDetail(data) {
+      let html = `
+        <div class="detail-row"><div class="detail-label">エッジ種別</div>${data.type}</div>`;
+      if (data.type === 'join') {
+        html += `
+          <div class="detail-row"><div class="detail-label">左カラム</div>${data.left_column}</div>
+          <div class="detail-row"><div class="detail-label">右カラム</div>${data.right_column}</div>
+          <div class="detail-row"><div class="detail-label">FK制約</div>${data.has_fk ? '<span class="badge badge-fk">あり</span>' : 'なし'}</div>`;
+      }
+      $('detail-body').innerHTML = html;
+    }
+
+    function applyFilter() {
+      if (!cy) return;
+      const q = $('search').value.toLowerCase();
+      const op = $('filter-op').value;
+      cy.nodes().forEach(n => {
+        const d = n.data();
+        const matchQ = !q || d.label.toLowerCase().includes(q);
+        const matchOp = !op || d.operation === op || (op === 'WRITE' && ['UPDATE', 'INSERT', 'DELETE'].includes(d.operation));
+        n.style('display', matchQ && matchOp ? 'element' : 'none');
+      });
+      cy.edges().forEach(e => {
+        const src = cy.getElementById(e.data('source'));
+        const tgt = cy.getElementById(e.data('target'));
+        e.style('display', src.style('display') !== 'none' && tgt.style('display') !== 'none' ? 'element' : 'none');
+      });
+    }
+
+    $('search').addEventListener('input', applyFilter);
+    $('filter-op').addEventListener('change', applyFilter);
+    $('layout-sel').addEventListener('change', () => { if (cy) cy.layout({ name: $('layout-sel').value, padding: 40 }).run(); });
+
+    $('btn-analyze').addEventListener('click', async () => {
+      $('btn-analyze').disabled = true;
+      $('progress-bar').style.width = '10%';
+      const resp = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const { job_id } = await resp.json();
+      currentJobId = job_id;
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        const s = await (await fetch(`/api/status/${job_id}`)).json();
+        $('progress-bar').style.width = (s.progress || 0) + '%';
+        if (s.state === 'completed') {
+          clearInterval(pollTimer);
+          const graph = await (await fetch(`/api/graph/${job_id}`)).json();
+          initCytoscape(graph);
+          $('btn-analyze').disabled = false;
+          $('progress-bar').style.width = '100%';
+        } else if (s.state === 'error') {
+          clearInterval(pollTimer);
+          alert('解析に失敗しました。サーバーログを確認してください。');
+          $('btn-analyze').disabled = false;
+        }
+      }, 500);
+    });
+  </script>
+</body>
+</html>
