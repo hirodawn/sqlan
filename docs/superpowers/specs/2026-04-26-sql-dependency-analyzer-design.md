@@ -65,6 +65,7 @@ SQLファイルパス一覧 + 呼び出しクラス/メソッド情報
 | DB接続 | SQLAlchemy 2.x（MySQL / PostgreSQL / Oracle 等） |
 | APIサーバー | FastAPI |
 | グラフ可視化 | Cytoscape.js |
+| フロントエンド | Plain HTML + Vanilla JS（フレームワークなし）、FastAPIで静的配信 |
 | 設定ファイル | TOML |
 | 非同期処理 | asyncio |
 
@@ -122,6 +123,22 @@ sqlManager.getResultList(Employee.class, "META-INF/sql/selectEmployee.sql", dto)
 - FK宣言がなくても実データから関連を推定（カラム名・値の一致度）
 
 **接続設定:** `config.toml` にJDBC互換の接続情報（host / port / DB名 / 認証情報）を記載。
+
+**`config.toml` サンプル:**
+```toml
+[source]
+java_root = "/path/to/your/java/project/src"
+sql_root  = "/path/to/your/java/project/src/main/resources"
+
+[database]
+url      = "mysql+pymysql://user:password@localhost:3306/mydb"
+# url = "postgresql+psycopg2://user:password@localhost:5432/mydb"
+# url = "oracle+cx_oracle://user:password@localhost:1521/mydb"
+
+[analysis]
+timeout_seconds     = 300
+cardinality_sample  = 10000  # COUNT(DISTINCT)のサンプル行数上限
+```
 
 ---
 
