@@ -40,8 +40,10 @@ class JavaScanner:
         for m in _METHOD_NAME.finditer(source):
             method_positions.append((m.start(), m.group(1)))
 
+        method_starts = [p for p, _ in method_positions]
+
         def method_at(pos: int) -> str:
-            idx = bisect.bisect_right(method_positions, (pos,)) - 1
+            idx = bisect.bisect_right(method_starts, pos) - 1
             if idx < 0:
                 return "unknown"
             return method_positions[idx][1]

@@ -32,5 +32,10 @@ def test_detects_insert_operation(refs):
     assert len(insert_refs) > 0
     assert all(r.operation == "INSERT" for r in insert_refs)
 
+def test_detects_unknown_operation(refs):
+    unknown_refs = [r for r in refs if "custom_audit" in r.sql_file]
+    assert len(unknown_refs) > 0
+    assert all(r.operation == "UNKNOWN" for r in unknown_refs)
+
 def test_records_calling_class(refs):
     assert any(r.calling_class == "SampleDao" for r in refs)

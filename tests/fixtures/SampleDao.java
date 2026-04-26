@@ -23,4 +23,7 @@ public class SampleDao {
         return jdbcManager.insertBySql(
             "META-INF/sql/insert_employee.sql", entity.getClass()).execute();
     }
+
+    // UNKNOWN: 特定のS2JDBCメソッド以外からSQL参照されるケース（定数定義等）
+    private static final String AUDIT_QUERY = "META-INF/sql/custom_audit.sql";
 }
