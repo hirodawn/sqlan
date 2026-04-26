@@ -31,9 +31,13 @@ class GraphBuilder:
                 "columns": info.columns,
             }})
 
-        # SQLファイルノード
+        # SQLファイルノード（同一ファイルが複数解析結果に現れても1ノードのみ生成）
         ref_map = {r.sql_file: r for r in result.sql_references}
+        seen_sql: set[str] = set()
         for analysis in result.sql_analyses:
+            if analysis.sql_file in seen_sql:
+                continue
+            seen_sql.add(analysis.sql_file)
             ref = ref_map.get(analysis.sql_file)
             nodes.append({"data": {
                 "id": f"sql:{analysis.sql_file}",
@@ -66,12 +70,19 @@ class GraphBuilder:
                     "has_fk": has_fk,
                 }})
 
-        # READ/WRITEエッジ（SQLファイル → テーブル）
+        # READ/WRITEエッジ（SQLファイル → テーブル、重複なし）
+        seen_rw: set[tuple[str, str, str]] = set()
         for analysis in result.sql_analyses:
             sid = f"sql:{analysis.sql_file}"
             for t in analysis.read_tables:
-                edges.append({"data": {"id": eid(), "source": sid, "target": f"table:{t}", "type": "read"}})
+                key = (sid, f"table:{t}", "read")
+                if key not in seen_rw:
+                    seen_rw.add(key)
+                    edges.append({"data": {"id": eid(), "source": sid, "target": f"table:{t}", "type": "read"}})
             for t in analysis.write_tables:
-                edges.append({"data": {"id": eid(), "source": sid, "target": f"table:{t}", "type": "write"}})
+                key = (sid, f"table:{t}", "write")
+                if key not in seen_rw:
+                    seen_rw.add(key)
+                    edges.append({"data": {"id": eid(), "source": sid, "target": f"table:{t}", "type": "write"}})
 
         return {"nodes": nodes, "edges": edges}
