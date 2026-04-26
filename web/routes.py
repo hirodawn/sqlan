@@ -9,7 +9,6 @@ from analyzer.graph_builder.builder import GraphBuilder
 from analyzer.models import AnalysisResult
 
 def _run_analysis(job_id: str, config: dict, jobs: dict) -> None:
-    jobs[job_id] = {"state": "running", "progress": 0}
     try:
         src = config.get("source", {})
         db_url = config.get("database", {}).get("url", "")
@@ -77,7 +76,7 @@ def create_router() -> APIRouter:
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         if job["state"] != "completed":
-            raise HTTPException(status_code=202, detail="Analysis not yet complete")
+            raise HTTPException(status_code=409, detail="Analysis not yet complete")
         return job["graph"]
 
     @router.get("/node/{node_id:path}")
