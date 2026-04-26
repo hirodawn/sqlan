@@ -40,6 +40,8 @@ class DBInspector:
             return []
 
     def get_table_info(self, table_name: str) -> TableInfo:
+        # row_count=-1 は DB接続失敗またはテーブル不存在を表すセンチネル値。
+        # UI側はこの値を「不明」として表示する（index.html 参照）。
         try:
             insp = inspect(self.engine)
             columns = [col["name"] for col in insp.get_columns(table_name)]

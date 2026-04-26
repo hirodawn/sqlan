@@ -25,10 +25,11 @@ def engine():
         conn.commit()
     return e
 
-def test_row_count(engine):
-    inspector = DBInspector(engine)
-    assert inspector.get_row_count("employee") == 3
-    assert inspector.get_row_count("department") == 2
+def test_row_count_employee(engine):
+    assert DBInspector(engine).get_row_count("employee") == 3
+
+def test_row_count_department(engine):
+    assert DBInspector(engine).get_row_count("department") == 2
 
 def test_row_count_nonexistent_returns_minus_one(engine):
     inspector = DBInspector(engine)
