@@ -23,7 +23,8 @@ def test_extract_join_info():
     assert len(result.joins) == 1
     join = result.joins[0]
     tables_in_join = {join.left_table, join.right_table}
-    assert "employee" in tables_in_join or "e" in tables_in_join
+    # sqlglotはエイリアスをそのまま保持するため left_table="e", right_table="d" になる
+    assert tables_in_join == {"e", "d"}
     assert "department_id" in (join.left_column, join.right_column)
 
 def test_extract_write_tables_from_update():
@@ -33,7 +34,8 @@ def test_extract_write_tables_from_update():
     assert "employee" in result.write_tables
     assert result.read_tables == []
 
-def test_parse_error_does_not_raise():
+def test_invalid_sql_returns_result_without_raising():
+    # sqlglotはWARNモードで構文エラーを例外に変えないため parse_error は None のまま返る
     parser = SqlFileParser()
     result = parser.parse("bad.sql", "THIS IS NOT VALID SQL !!!")
     assert isinstance(result, SqlAnalysis)
