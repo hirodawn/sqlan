@@ -1,0 +1,12 @@
+[source]
+java_root = "/path/to/java/project/src"
+sql_root  = "/path/to/java/project/src/main/resources"
+
+[database]
+url = "mysql+pymysql://user:password@localhost:3306/mydb"
+# url = "postgresql+psycopg2://user:password@localhost:5432/mydb"
+# SQLiteでのテスト: "sqlite:///./test.db"
+
+[analysis]
+timeout_seconds    = 300
+cardinality_sample = 10000
