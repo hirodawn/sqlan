@@ -170,14 +170,16 @@ class GraphBuilder:
         for analysis in result.sql_analyses:
             sid = f"sql:{analysis.sql_file}"
             for t in analysis.read_tables:
-                key = (sid, f"table:{t}", "read")
+                tl = t.lower()
+                key = (sid, f"table:{tl}", "read")
                 if key not in seen_rw:
                     seen_rw.add(key)
-                    edges.append({"data": {"id": eid(), "source": sid, "target": f"table:{t}", "type": "read"}})
+                    edges.append({"data": {"id": eid(), "source": sid, "target": f"table:{tl}", "type": "read"}})
             for t in analysis.write_tables:
-                key = (sid, f"table:{t}", "write")
+                tl = t.lower()
+                key = (sid, f"table:{tl}", "write")
                 if key not in seen_rw:
                     seen_rw.add(key)
-                    edges.append({"data": {"id": eid(), "source": sid, "target": f"table:{t}", "type": "write"}})
+                    edges.append({"data": {"id": eid(), "source": sid, "target": f"table:{tl}", "type": "write"}})
 
         return {"nodes": nodes, "edges": edges}
