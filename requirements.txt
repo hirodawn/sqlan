@@ -4,3 +4,8 @@ sqlalchemy>=2.0.0
 sqlglot>=23.0.0
 pytest>=8.0.0
 httpx>=0.27.0
+
+# DBドライバー（接続先に合わせていずれかをインストール）
+# oracledb          # Oracle: pip install oracledb
+# pymysql           # MySQL:  pip install pymysql
+# psycopg2-binary   # PostgreSQL: pip install psycopg2-binary
