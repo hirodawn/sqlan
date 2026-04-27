@@ -12,15 +12,18 @@ class GraphBuilder:
             return f"e{_eid[0]}"
 
         fk_pairs: set[tuple] = {
-            (fk.from_table, fk.from_column, fk.to_table, fk.to_column)
+            (fk.from_table.lower(), fk.from_column.lower(), fk.to_table.lower(), fk.to_column.lower())
             for fk in result.foreign_keys
         }
 
-        # SQLファイル数カウント（テーブルごと）
+        # table_info は大文字小文字混在のキーで届く可能性があるため lowercase で引ける辞書を作る
+        table_info_lower = {k.lower(): v for k, v in result.table_info.items()}
+
+        # SQLファイル数カウント（テーブルごと、lowercase キーで統一）
         sql_counts: dict[str, int] = {}
         for analysis in result.sql_analyses:
             for t in analysis.read_tables + analysis.write_tables:
-                sql_counts[t] = sql_counts.get(t, 0) + 1
+                sql_counts[t.lower()] = sql_counts.get(t.lower(), 0) + 1
 
         # JOINキー集合: {table_name_lower: {col_name_lower, ...}}
         join_keys: dict[str, set[str]] = {}
@@ -46,25 +49,26 @@ class GraphBuilder:
                                   (join.right_table.lower(), join.right_column.lower())])
                 join_sql_files.setdefault(key, []).append(analysis.sql_file)
 
-        # SQLファイルからテーブルへの参照: {table_name: [sql_file, ...]}
+        # SQLファイルからテーブルへの参照: {table_name_lower: [sql_file, ...]}
         table_sql_refs: dict[str, list[str]] = {}
         for analysis in result.sql_analyses:
             for t in analysis.read_tables + analysis.write_tables:
-                table_sql_refs.setdefault(t, [])
-                if analysis.sql_file not in table_sql_refs[t]:
-                    table_sql_refs[t].append(analysis.sql_file)
+                tl = t.lower()
+                table_sql_refs.setdefault(tl, [])
+                if analysis.sql_file not in table_sql_refs[tl]:
+                    table_sql_refs[tl].append(analysis.sql_file)
 
-        # 全テーブル名収集（SQL参照 + JOINから）
+        # 全テーブル名収集（lowercase で統一）
         all_table_names: set[str] = set(sql_counts.keys())
         for analysis in result.sql_analyses:
             for join in analysis.joins:
-                all_table_names.add(join.left_table)
-                all_table_names.add(join.right_table)
+                all_table_names.add(join.left_table.lower())
+                all_table_names.add(join.right_table.lower())
 
-        # テーブルノード生成
+        # テーブルノード生成（name は既に lowercase）
         for name in sorted(all_table_names):
-            info = result.table_info.get(name)
-            name_l = name.lower()
+            info = table_info_lower.get(name)
+            name_l = name
             col_data = []
             for col_name in (info.columns if info else []):
                 col_l = col_name.lower()
@@ -89,7 +93,7 @@ class GraphBuilder:
                 "label": name,
                 "type": "table",
                 "row_count": info.row_count if info else -1,
-                "sql_file_count": sql_counts.get(name, 0),
+                "sql_file_count": sql_counts.get(name_l, 0),
                 "columns": col_data,
                 "sql_files": table_sql_refs.get(name, []),
             }})
