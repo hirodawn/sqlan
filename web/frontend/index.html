@@ -4,15 +4,21 @@
   <meta charset="UTF-8">
   <title>sqlan — SQL依存関係アナライザー</title>
   <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-node-html-label@1.2.2/dist/cytoscape-node-html-label.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; background: #1a1a2e; color: #e0e0e0; }
     #header { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #16213e; border-bottom: 1px solid #0f3460; flex-wrap: wrap; }
     #header h1 { font-size: 1.1rem; color: #e94560; flex-shrink: 0; }
-    #search { padding: 5px 8px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; width: 180px; }
+    #search { padding: 5px 8px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; width: 160px; }
     #filter-op, #layout-sel { padding: 5px 6px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; }
     .hdr-label { font-size: 0.75rem; color: #888; white-space: nowrap; }
-    #min-refs { width: 50px; padding: 4px 6px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; text-align: center; }
+    #min-refs { width: 48px; padding: 4px 6px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; text-align: center; }
+    #sql-toggle-wrap { display: flex; align-items: center; gap: 6px; }
+    #sql-toggle { appearance: none; width: 34px; height: 18px; background: #333; border-radius: 9px; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
+    #sql-toggle:checked { background: #2d6b4a; }
+    #sql-toggle::after { content: ''; position: absolute; width: 14px; height: 14px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: left 0.2s; }
+    #sql-toggle:checked::after { left: 18px; }
     #btn-analyze { padding: 5px 14px; border-radius: 4px; border: none; background: #e94560; color: #fff; cursor: pointer; margin-left: auto; flex-shrink: 0; }
     #btn-analyze:disabled { opacity: 0.5; cursor: default; }
     #progress-bar { height: 3px; background: #e94560; width: 0%; transition: width 0.3s; }
@@ -26,19 +32,29 @@
     #warn-list li { color: #e0c080; font-size: 0.78rem; line-height: 1.6; font-family: monospace; }
     #main { display: flex; flex: 1; overflow: hidden; }
     #cy { flex: 1; }
-    #detail { width: 280px; background: #16213e; border-left: 1px solid #0f3460; padding: 16px; overflow-y: auto; }
+    #detail { width: 290px; background: #16213e; border-left: 1px solid #0f3460; padding: 14px; overflow-y: auto; }
     #detail h2 { font-size: 0.9rem; color: #e94560; margin-bottom: 12px; }
     .detail-row { margin-bottom: 8px; font-size: 0.82rem; }
-    .detail-label { color: #888; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 2px; }
+    .detail-label { color: #888; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 3px; }
     .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem; }
     .badge-select { background: #1a6b4a; } .badge-update { background: #6b3a1a; } .badge-insert { background: #1a3a6b; } .badge-unknown { background: #444; }
     .badge-table { background: #2d1b6b; } .badge-fk { background: #1a5c6b; }
+    .er-node { font-family: monospace; font-size: 11px; color: #e0e0e0; border-radius: 4px; overflow: hidden; min-width: 120px; }
+    .er-header { background: #3a2080; padding: 4px 8px; font-weight: bold; text-align: center; border-bottom: 1px solid #6a4bdb; font-size: 11px; }
+    .er-col { padding: 2px 8px; border-bottom: 1px solid #2a1a4a; white-space: nowrap; font-size: 10px; }
+    .er-col-join { background: #2a3a00; color: #c8e060; }
+    .er-col-update { background: #3a1a00; color: #e0a060; }
+    .er-col-normal { color: #aaa; }
+    .col-list-item { display: inline-block; padding: 1px 5px; margin: 1px; border-radius: 2px; font-size: 0.75rem; }
+    .col-join { background: #2a3a00; color: #c8e060; }
+    .col-update { background: #3a1a00; color: #e0a060; }
+    .sql-file-ref { color: #2d8b6b; font-size: 0.78rem; background: #0d2018; border-radius: 2px; padding: 2px 5px; margin: 2px 0; display: block; }
   </style>
 </head>
 <body>
   <div id="header">
     <h1>sqlan</h1>
-    <input id="search" type="text" placeholder="テーブル名 / SQLファイル名">
+    <input id="search" type="text" placeholder="テーブル名で絞り込み">
     <select id="filter-op">
       <option value="">すべての操作</option>
       <option value="SELECT">SELECT</option>
@@ -53,7 +69,11 @@
       <option value="circle">円形</option>
     </select>
     <span class="hdr-label">最小参照数</span>
-    <input id="min-refs" type="number" min="1" value="1" title="この件数以上のSQLファイルに参照されているテーブルのみ表示">
+    <input id="min-refs" type="number" min="1" value="1" title="この件数以上のSQLに参照されているテーブルのみ表示">
+    <div id="sql-toggle-wrap">
+      <input type="checkbox" id="sql-toggle">
+      <label for="sql-toggle" class="hdr-label">SQLファイルを表示</label>
+    </div>
     <button id="btn-analyze">解析実行</button>
   </div>
   <div id="progress-bar"></div>
@@ -82,16 +102,48 @@
 
     const $ = id => document.getElementById(id);
 
+    function buildErHtml(data) {
+      const cols = data.columns || [];
+      const rows = cols.map(c => {
+        let cls = 'er-col-normal';
+        let suffix = '';
+        if (c.is_join_key) cls = 'er-col-join';
+        else if (c.is_update_target) cls = 'er-col-update';
+        if (c.placeholder_name) suffix = ` <span style="color:#888;font-size:9px;">/*${c.placeholder_name}*/</span>`;
+        if (c.update_source) suffix = ` <span style="color:#888;font-size:9px;">← ${c.update_source}</span>`;
+        const icon = c.is_join_key ? '▶ ' : c.is_update_target ? '✏ ' : '  ';
+        return `<div class="er-col ${cls}">${icon}${c.name}${suffix}</div>`;
+      }).join('');
+      return `<div class="er-node"><div class="er-header">${data.label}</div>${rows}</div>`;
+    }
+
+    function computeNodeSize(data) {
+      const cols = data.columns || [];
+      const maxLen = Math.max(data.label.length, ...cols.map(c => c.name.length + 3));
+      return {
+        w: Math.max(130, maxLen * 7 + 32),
+        h: 26 + cols.length * 21 + 4,
+      };
+    }
+
     function initCytoscape(elements) {
       if (cy) cy.destroy();
+
       const nodeCount = elements.filter(e => !e.data.source).length;
       const isLarge = nodeCount > 150;
 
       if (isLarge && $('layout-sel').value === 'cose') {
         $('layout-sel').value = 'grid';
       }
-
       const curveStyle = isLarge ? 'straight' : 'bezier';
+
+      elements.filter(e => !e.data.source && e.data.type === 'table').forEach(e => {
+        const { w, h } = computeNodeSize(e.data);
+        e.data.node_width = w;
+        e.data.node_height = h;
+      });
+
+      cytoscape.use(cytoscapeNodeHtmlLabel);
 
       cy = cytoscape({
         container: $('cy'),
@@ -100,49 +152,106 @@
         textureOnViewport: isLarge,
         style: [
           { selector: 'node[type="table"]', style: {
-            'background-color': '#4a2d8b', 'label': 'data(label)', 'color': '#fff',
-            'font-size': isLarge ? '8px' : '11px', 'text-valign': 'center',
-            'width': isLarge ? '36px' : '60px', 'height': isLarge ? '36px' : '60px', 'shape': 'ellipse',
+            'shape': 'rectangle',
+            'background-color': '#2d1b6b',
+            'border-color': '#5a3bbb',
+            'border-width': 1,
+            'label': '',
+            'width': 'data(node_width)',
+            'height': 'data(node_height)',
           }},
           { selector: 'node[type="sql_file"]', style: {
-            'background-color': '#2d6b4a', 'label': isLarge ? '' : 'data(label)',
-            'color': '#fff', 'font-size': '9px', 'text-valign': 'center',
-            'shape': 'rectangle', 'width': isLarge ? '14px' : '80px', 'height': isLarge ? '14px' : '30px',
+            'background-color': '#2d6b4a',
+            'label': 'data(label)',
+            'color': '#fff',
+            'font-size': '9px',
+            'text-valign': 'center',
+            'shape': 'rectangle',
+            'width': isLarge ? '14px' : '80px',
+            'height': isLarge ? '14px' : '30px',
+            'display': $('sql-toggle').checked ? 'element' : 'none',
           }},
           { selector: 'edge[type="join"]', style: {
-            'line-color': '#e94560', 'width': isLarge ? 1 : 2,
-            'target-arrow-shape': 'none', 'curve-style': curveStyle,
+            'line-color': '#e94560',
+            'width': 2,
+            'target-arrow-shape': 'none',
+            'curve-style': curveStyle,
+            'label': 'data(label)',
+            'font-size': '9px',
+            'color': '#e94560',
+            'text-background-color': '#1a1a2e',
+            'text-background-opacity': 0.8,
+            'text-background-padding': '2px',
           }},
-          { selector: 'edge[type="join"][has_fk]', style: { 'line-style': 'solid' } },
+          { selector: 'edge[type="column_copy"]', style: {
+            'line-color': '#1ab4b4',
+            'width': 2,
+            'target-arrow-shape': 'triangle',
+            'target-arrow-color': '#1ab4b4',
+            'curve-style': curveStyle,
+            'label': 'data(label)',
+            'font-size': '9px',
+            'color': '#1ab4b4',
+            'text-background-color': '#1a1a2e',
+            'text-background-opacity': 0.8,
+            'text-background-padding': '2px',
+          }},
           { selector: 'edge[type="read"]', style: {
-            'line-color': '#4a8b6b', 'width': 1,
-            'target-arrow-shape': isLarge ? 'none' : 'triangle',
-            'target-arrow-color': '#4a8b6b', 'curve-style': curveStyle,
+            'line-color': '#4a8b6b',
+            'width': 1,
+            'target-arrow-shape': 'triangle',
+            'target-arrow-color': '#4a8b6b',
+            'curve-style': curveStyle,
+            'display': $('sql-toggle').checked ? 'element' : 'none',
           }},
           { selector: 'edge[type="write"]', style: {
-            'line-color': '#e9a020', 'width': 1,
-            'target-arrow-shape': isLarge ? 'none' : 'triangle',
-            'target-arrow-color': '#e9a020', 'curve-style': curveStyle,
+            'line-color': '#e9a020',
+            'width': 1,
+            'target-arrow-shape': 'triangle',
+            'target-arrow-color': '#e9a020',
+            'curve-style': curveStyle,
+            'display': $('sql-toggle').checked ? 'element' : 'none',
           }},
           { selector: ':selected', style: { 'border-width': 3, 'border-color': '#fff' } },
         ],
         layout: { name: $('layout-sel').value, padding: 40 },
       });
-      cy.on('tap', 'node', e => showDetail(e.target.data()));
+
+      if (!isLarge) {
+        cy.nodeHtmlLabel([{
+          query: 'node[type="table"]',
+          halign: 'center',
+          valign: 'top',
+          halignBox: 'center',
+          valignBox: 'top',
+          tpl: buildErHtml,
+        }]);
+      } else {
+        cy.style().selector('node[type="table"]').style({ 'label': 'data(label)', 'font-size': '8px', 'color': '#fff', 'text-valign': 'center', 'width': '40px', 'height': '40px' }).update();
+      }
+
+      cy.on('tap', 'node', e => showNodeDetail(e.target.data()));
       cy.on('tap', 'edge', e => showEdgeDetail(e.target.data()));
+      applySqlFileVisibility();
       updateStats();
+    }
+
+    function applySqlFileVisibility() {
+      if (!cy) return;
+      const show = $('sql-toggle').checked;
+      const disp = show ? 'element' : 'none';
+      cy.nodes('[type="sql_file"]').style('display', disp);
+      cy.edges('[type="read"],[type="write"]').style('display', disp);
     }
 
     function applyMinRefs() {
       if (!fullElements) return;
       const min = parseInt($('min-refs').value) || 1;
-
       const visibleTableIds = new Set(
         fullElements
           .filter(e => !e.data.source && e.data.type === 'table' && (e.data.sql_file_count || 0) >= min)
           .map(e => e.data.id)
       );
-
       const filtered = fullElements.filter(e => {
         if (!e.data.source) {
           return e.data.type === 'sql_file' || visibleTableIds.has(e.data.id);
@@ -151,53 +260,8 @@
         const tgtOk = e.data.target.startsWith('sql:') || visibleTableIds.has(e.data.target);
         return srcOk && tgtOk;
       });
-
       initCytoscape(filtered);
       applyFilter();
-    }
-
-    function updateStats() {
-      if (!cy || !fullElements) { $('stats-bar').textContent = ''; return; }
-      const totalNodes = fullElements.filter(e => !e.data.source).length;
-      const visNodes = cy.nodes().length;
-      const visEdges = cy.edges().length;
-      $('stats-bar').textContent =
-        `表示: ノード ${visNodes}件 / 全${totalNodes}件、エッジ ${visEdges}件`;
-    }
-
-    function showDetail(data) {
-      const op = data.operation || '';
-      const badgeClass = { SELECT: 'badge-select', UPDATE: 'badge-update', INSERT: 'badge-insert' }[op] || 'badge-unknown';
-      let html = '';
-      if (data.type === 'table') {
-        html = `
-          <div class="detail-row"><div class="detail-label">種別</div><span class="badge badge-table">テーブル</span></div>
-          <div class="detail-row"><div class="detail-label">名前</div>${data.label}</div>
-          <div class="detail-row"><div class="detail-label">行数</div>${data.row_count >= 0 ? data.row_count.toLocaleString() : '不明'}</div>
-          <div class="detail-row"><div class="detail-label">参照SQLファイル数</div>${data.sql_file_count}</div>
-          <div class="detail-row"><div class="detail-label">カラム</div>${(data.columns || []).join(', ') || '不明'}</div>`;
-      } else {
-        html = `
-          <div class="detail-row"><div class="detail-label">種別</div>SQLファイル</div>
-          <div class="detail-row"><div class="detail-label">ファイル名</div>${data.label}</div>
-          <div class="detail-row"><div class="detail-label">操作</div><span class="badge ${badgeClass}">${op}</span></div>
-          <div class="detail-row"><div class="detail-label">呼び出しクラス</div>${data.calling_class || '不明'}</div>
-          <div class="detail-row"><div class="detail-label">呼び出しメソッド</div>${data.calling_method || '不明'}</div>
-          <div class="detail-row"><div class="detail-label">パス</div><small>${data.sql_file || ''}</small></div>`;
-      }
-      $('detail-body').innerHTML = html;
-    }
-
-    function showEdgeDetail(data) {
-      let html = `
-        <div class="detail-row"><div class="detail-label">エッジ種別</div>${data.type}</div>`;
-      if (data.type === 'join') {
-        html += `
-          <div class="detail-row"><div class="detail-label">左カラム</div>${data.left_column}</div>
-          <div class="detail-row"><div class="detail-label">右カラム</div>${data.right_column}</div>
-          <div class="detail-row"><div class="detail-label">FK制約</div>${data.has_fk ? '<span class="badge badge-fk">あり</span>' : 'なし'}</div>`;
-      }
-      $('detail-body').innerHTML = html;
     }
 
     function applyFilter() {
@@ -213,17 +277,80 @@
       cy.edges().forEach(e => {
         const src = cy.getElementById(e.data('source'));
         const tgt = cy.getElementById(e.data('target'));
-        e.style('display', src.style('display') !== 'none' && tgt.style('display') !== 'none' ? 'element' : 'none');
+        const bothVisible = src.style('display') !== 'none' && tgt.style('display') !== 'none';
+        const type = e.data('type');
+        const sqlHidden = (type === 'read' || type === 'write') && !$('sql-toggle').checked;
+        e.style('display', bothVisible && !sqlHidden ? 'element' : 'none');
       });
       updateStats();
+    }
+
+    function updateStats() {
+      if (!cy || !fullElements) { $('stats-bar').textContent = ''; return; }
+      const totalNodes = fullElements.filter(e => !e.data.source).length;
+      $('stats-bar').textContent =
+        `表示: ノード ${cy.nodes().length}件 / 全${totalNodes}件、エッジ ${cy.edges().length}件`;
+    }
+
+    function showNodeDetail(data) {
+      let html = '';
+      if (data.type === 'table') {
+        const colHtml = (data.columns || []).map(c => {
+          const cls = c.is_join_key ? 'col-join' : c.is_update_target ? 'col-update' : '';
+          const icon = c.is_join_key ? '▶ ' : c.is_update_target ? '✏ ' : '';
+          let extra = '';
+          if (c.placeholder_name) extra = ` <small style="color:#888;">/*${c.placeholder_name}*/</small>`;
+          if (c.update_source) extra = ` <small style="color:#888;">← ${c.update_source}</small>`;
+          return `<span class="col-list-item ${cls}">${icon}${c.name}${extra}</span>`;
+        }).join('');
+        const sqlHtml = (data.sql_files || []).map(f =>
+          `<span class="sql-file-ref">📄 ${f}</span>`
+        ).join('');
+        html = `
+          <div class="detail-row"><div class="detail-label">種別</div><span class="badge badge-table">テーブル</span></div>
+          <div class="detail-row"><div class="detail-label">名前</div>${data.label}</div>
+          <div class="detail-row"><div class="detail-label">行数</div>${data.row_count >= 0 ? data.row_count.toLocaleString() : '不明'}</div>
+          <div class="detail-row"><div class="detail-label">カラム</div>${colHtml || '不明'}</div>
+          <div class="detail-row"><div class="detail-label">参照SQL (${(data.sql_files || []).length}件)</div>${sqlHtml || 'なし'}</div>`;
+      } else {
+        const op = data.operation || '';
+        const badgeClass = { SELECT: 'badge-select', UPDATE: 'badge-update', INSERT: 'badge-insert' }[op] || 'badge-unknown';
+        html = `
+          <div class="detail-row"><div class="detail-label">種別</div>SQLファイル</div>
+          <div class="detail-row"><div class="detail-label">ファイル名</div>${data.label}</div>
+          <div class="detail-row"><div class="detail-label">操作</div><span class="badge ${badgeClass}">${op}</span></div>
+          <div class="detail-row"><div class="detail-label">呼び出しクラス</div>${data.calling_class || '不明'}</div>
+          <div class="detail-row"><div class="detail-label">呼び出しメソッド</div>${data.calling_method || '不明'}</div>
+          <div class="detail-row"><div class="detail-label">パス</div><small>${data.sql_file || ''}</small></div>`;
+      }
+      $('detail-body').innerHTML = html;
+    }
+
+    function showEdgeDetail(data) {
+      let html = `<div class="detail-row"><div class="detail-label">エッジ種別</div>${data.type}</div>`;
+      if (data.type === 'join') {
+        html += `
+          <div class="detail-row"><div class="detail-label">結合条件</div><code>${data.left_column} = ${data.right_column}</code></div>
+          <div class="detail-row"><div class="detail-label">FK制約</div>${data.has_fk ? '<span class="badge badge-fk">あり</span>' : 'なし'}</div>`;
+      } else if (data.type === 'column_copy') {
+        const src = (data.source || '').replace('table:', '');
+        const tgt = (data.target || '').replace('table:', '');
+        html += `
+          <div class="detail-row"><div class="detail-label">コピー元</div><code>${src}.${data.source_column}</code></div>
+          <div class="detail-row"><div class="detail-label">コピー先</div><code>${tgt}.${data.target_column}</code></div>`;
+      }
+      if (data.sql_files && data.sql_files.length > 0) {
+        const sqlHtml = data.sql_files.map(f => `<span class="sql-file-ref">📄 ${f}</span>`).join('');
+        html += `<div class="detail-row"><div class="detail-label">SQL ファイル (${data.sql_files.length}件)</div>${sqlHtml}</div>`;
+      }
+      $('detail-body').innerHTML = html;
     }
 
     function showWarnings(warnings) {
       const bar = $('warn-bar');
       if (!warnings || warnings.length === 0) { bar.style.display = 'none'; return; }
       $('warn-summary').textContent = `⚠ SQLファイルが見つかりませんでした: ${warnings.length}件（クリックで詳細表示）`;
-      const ul = $('warn-list');
-      ul.innerHTML = warnings.map(w => `<li>${w.replace(/</g, '&lt;')}</li>`).join('');
+      $('warn-list').innerHTML = warnings.map(w => `<li>${w.replace(/</g, '&lt;')}</li>`).join('');
       bar.style.display = 'block';
     }
 
@@ -256,8 +383,11 @@
 
     $('search').addEventListener('input', applyFilter);
     $('filter-op').addEventListener('change', applyFilter);
-    $('layout-sel').addEventListener('change', () => { if (cy) cy.layout({ name: $('layout-sel').value, padding: 40 }).run(); });
+    $('layout-sel').addEventListener('change', () => {
+      if (cy) cy.layout({ name: $('layout-sel').value, padding: 40 }).run();
+    });
     $('min-refs').addEventListener('change', applyMinRefs);
+    $('sql-toggle').addEventListener('change', applySqlFileVisibility);
 
     $('btn-analyze').addEventListener('click', async () => {
       $('btn-analyze').disabled = true;
