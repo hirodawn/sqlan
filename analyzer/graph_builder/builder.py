@@ -73,7 +73,7 @@ class GraphBuilder:
                 is_update = cu is not None
                 placeholder = cu.placeholder_name if cu else None
                 update_src = (
-                    f"{cu.source_table}.{cu.source_column}"
+                    f"{cu.source_table.lower()}.{cu.source_column.lower()}"
                     if cu and cu.source_table
                     else None
                 )
@@ -145,13 +145,15 @@ class GraphBuilder:
                     continue
                 key = (cu.source_table, cu.source_column, cu.target_table, cu.target_column)
                 if key not in seen_copy:
+                    src_col = cu.source_column.lower()
+                    tgt_col = cu.target_column.lower()
                     seen_copy[key] = {
-                        "source": f"table:{cu.source_table}",
-                        "target": f"table:{cu.target_table}",
+                        "source": f"table:{cu.source_table.lower()}",
+                        "target": f"table:{cu.target_table.lower()}",
                         "type": "column_copy",
-                        "source_column": cu.source_column,
-                        "target_column": cu.target_column,
-                        "label": f"{cu.source_column} → {cu.target_column}",
+                        "source_column": src_col,
+                        "target_column": tgt_col,
+                        "label": f"{src_col} → {tgt_col}",
                         "sql_files": [],
                     }
                 if analysis.sql_file not in seen_copy[key]["sql_files"]:
