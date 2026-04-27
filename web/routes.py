@@ -1,3 +1,4 @@
+import logging
 import uuid
 from pathlib import Path
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
@@ -7,6 +8,8 @@ from analyzer.sql_parser.parser import SqlFileParser
 from analyzer.db_inspector.inspector import DBInspector
 from analyzer.graph_builder.builder import GraphBuilder
 from analyzer.models import AnalysisResult
+
+logger = logging.getLogger(__name__)
 
 def _run_analysis(job_id: str, config: dict, jobs: dict) -> None:
     try:
@@ -47,6 +50,7 @@ def _run_analysis(job_id: str, config: dict, jobs: dict) -> None:
     except Exception as e:
         jobs[job_id]["state"] = "error"
         jobs[job_id]["error"] = str(e)
+        logger.exception("Analysis failed for job %s", job_id)
 
 def create_router() -> APIRouter:
     router = APIRouter()
@@ -68,7 +72,10 @@ def create_router() -> APIRouter:
         job = request.app.state.jobs.get(job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
-        return {"state": job["state"], "progress": job.get("progress", 0)}
+        resp = {"state": job["state"], "progress": job.get("progress", 0)}
+        if job["state"] == "error":
+            resp["error"] = job.get("error", "Unknown error")
+        return resp
 
     @router.get("/graph/{job_id}")
     def get_graph(job_id: str, request: Request):

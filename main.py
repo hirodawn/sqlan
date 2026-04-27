@@ -1,6 +1,12 @@
+import logging
 import sys
 import tomllib
 import uvicorn
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 def load_config(path: str) -> dict:
     with open(path, "rb") as f:

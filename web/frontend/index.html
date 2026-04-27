@@ -154,7 +154,7 @@
           $('progress-bar').style.width = '100%';
         } else if (s.state === 'error') {
           clearInterval(pollTimer);
-          alert('解析に失敗しました。サーバーログを確認してください。');
+          alert('解析に失敗しました。\n\n' + (s.error || '詳細不明'));
           $('btn-analyze').disabled = false;
         }
       }, 500);
