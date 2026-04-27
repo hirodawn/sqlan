@@ -54,6 +54,7 @@ def _run_analysis(job_id: str, config: dict, jobs: dict) -> None:
         if not_found:
             for f in not_found:
                 logger.warning("  SQLファイルが見つかりません: %s", f)
+        jobs[job_id]["warnings"] = [f"SQLファイルが見つかりません: {f}" for f in not_found]
         jobs[job_id]["progress"] = 50
 
         # 3. DB Inspector
@@ -115,6 +116,8 @@ def create_router() -> APIRouter:
         resp = {"state": job["state"], "progress": job.get("progress", 0)}
         if job["state"] == "error":
             resp["error"] = job.get("error", "Unknown error")
+        if job.get("warnings"):
+            resp["warnings"] = job["warnings"]
         return resp
 
     @router.get("/graph/{job_id}")
