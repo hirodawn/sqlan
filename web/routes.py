@@ -35,10 +35,27 @@ def _run_analysis(job_id: str, config: dict, jobs: dict) -> None:
 
         # 3. DB Inspector
         if db_url:
-            # パスワードをマスクして記録（スキーム://ユーザー:***@ホスト/DB の形式）
             import re as _re
+            from sqlalchemy.engine.url import make_url
+            from sqlalchemy.exc import ArgumentError
             masked = _re.sub(r'://([^:@]+):([^@]+)@', r'://\1:***@', db_url)
             logger.info("Connecting to DB: %s", masked)
+            try:
+                parsed = make_url(db_url)
+            except ArgumentError as e:
+                raise ValueError(
+                    f"DB URLの形式が正しくありません: {masked}\n"
+                    f"正しい形式例: oracle+oracledb://user:pass@host:port/service"
+                ) from e
+            # SQLite はホストなしが正常。それ以外でホストが取れない場合は URL 形式が誤り。
+            needs_host = parsed.drivername.split("+")[0] not in ("sqlite",)
+            if needs_host and parsed.host is None:
+                raise ValueError(
+                    f"DB URLからホスト名を解析できません: {masked}\n"
+                    f"@ の直後に // が入っていませんか？\n"
+                    f"誤: ...@//host:port/service\n"
+                    f"正: ...@host:port/service"
+                )
             engine = create_engine(db_url)
             inspector = DBInspector(engine)
             all_tables = {t for a in result.sql_analyses for t in a.read_tables + a.write_tables}
