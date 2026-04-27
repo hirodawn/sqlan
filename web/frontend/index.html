@@ -7,14 +7,23 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; background: #1a1a2e; color: #e0e0e0; }
-    #header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #16213e; border-bottom: 1px solid #0f3460; }
-    #header h1 { font-size: 1.1rem; color: #e94560; }
-    #search { padding: 6px 10px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; width: 220px; }
-    #filter-op { padding: 6px 8px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; }
-    #layout-sel { padding: 6px 8px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; }
-    #btn-analyze { padding: 6px 16px; border-radius: 4px; border: none; background: #e94560; color: #fff; cursor: pointer; margin-left: auto; }
+    #header { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #16213e; border-bottom: 1px solid #0f3460; flex-wrap: wrap; }
+    #header h1 { font-size: 1.1rem; color: #e94560; flex-shrink: 0; }
+    #search { padding: 5px 8px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; width: 180px; }
+    #filter-op, #layout-sel { padding: 5px 6px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; }
+    .hdr-label { font-size: 0.75rem; color: #888; white-space: nowrap; }
+    #min-refs { width: 50px; padding: 4px 6px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #e0e0e0; text-align: center; }
+    #btn-analyze { padding: 5px 14px; border-radius: 4px; border: none; background: #e94560; color: #fff; cursor: pointer; margin-left: auto; flex-shrink: 0; }
     #btn-analyze:disabled { opacity: 0.5; cursor: default; }
     #progress-bar { height: 3px; background: #e94560; width: 0%; transition: width 0.3s; }
+    #cache-bar { display: none; align-items: center; gap: 10px; padding: 5px 14px; background: #0d2137; border-bottom: 1px solid #1a4060; font-size: 0.8rem; color: #7aaabb; }
+    #btn-load-cache { padding: 3px 10px; border-radius: 3px; border: none; background: #1a5c3a; color: #fff; cursor: pointer; font-size: 0.78rem; }
+    #btn-clear-cache { padding: 3px 10px; border-radius: 3px; border: none; background: #3a1a1a; color: #ccc; cursor: pointer; font-size: 0.78rem; }
+    #stats-bar { padding: 2px 14px; font-size: 0.72rem; color: #446; background: #12192e; text-align: right; min-height: 16px; }
+    #warn-bar { display: none; background: #3a2a00; border-bottom: 1px solid #a06000; padding: 6px 14px; font-size: 0.82rem; color: #f0c040; }
+    #warn-bar summary { cursor: pointer; user-select: none; }
+    #warn-list { margin-top: 6px; max-height: 160px; overflow-y: auto; padding-left: 16px; }
+    #warn-list li { color: #e0c080; font-size: 0.78rem; line-height: 1.6; font-family: monospace; }
     #main { display: flex; flex: 1; overflow: hidden; }
     #cy { flex: 1; }
     #detail { width: 280px; background: #16213e; border-left: 1px solid #0f3460; padding: 16px; overflow-y: auto; }
@@ -24,16 +33,12 @@
     .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem; }
     .badge-select { background: #1a6b4a; } .badge-update { background: #6b3a1a; } .badge-insert { background: #1a3a6b; } .badge-unknown { background: #444; }
     .badge-table { background: #2d1b6b; } .badge-fk { background: #1a5c6b; }
-    #warn-bar { display: none; background: #3a2a00; border-bottom: 1px solid #a06000; padding: 6px 16px; font-size: 0.82rem; color: #f0c040; }
-    #warn-bar summary { cursor: pointer; user-select: none; }
-    #warn-list { margin-top: 6px; max-height: 160px; overflow-y: auto; padding-left: 16px; }
-    #warn-list li { color: #e0c080; font-size: 0.78rem; line-height: 1.6; font-family: monospace; }
   </style>
 </head>
 <body>
   <div id="header">
     <h1>sqlan</h1>
-    <input id="search" type="text" placeholder="テーブル名 / SQLファイル名で絞り込み">
+    <input id="search" type="text" placeholder="テーブル名 / SQLファイル名">
     <select id="filter-op">
       <option value="">すべての操作</option>
       <option value="SELECT">SELECT</option>
@@ -47,9 +52,17 @@
       <option value="grid">グリッド</option>
       <option value="circle">円形</option>
     </select>
+    <span class="hdr-label">最小参照数</span>
+    <input id="min-refs" type="number" min="1" value="1" title="この件数以上のSQLファイルに参照されているテーブルのみ表示">
     <button id="btn-analyze">解析実行</button>
   </div>
   <div id="progress-bar"></div>
+  <div id="cache-bar">
+    <span>💾</span><span id="cache-info"></span>
+    <button id="btn-load-cache">グラフを読み込む</button>
+    <button id="btn-clear-cache">キャッシュをクリア</button>
+  </div>
+  <div id="stats-bar"></div>
   <details id="warn-bar">
     <summary id="warn-summary"></summary>
     <ul id="warn-list"></ul>
@@ -65,27 +78,91 @@
     let cy = null;
     let currentJobId = null;
     let pollTimer = null;
+    let fullElements = null;
 
     const $ = id => document.getElementById(id);
 
     function initCytoscape(elements) {
       if (cy) cy.destroy();
+      const nodeCount = elements.filter(e => !e.data.source).length;
+      const isLarge = nodeCount > 150;
+
+      if (isLarge && $('layout-sel').value === 'cose') {
+        $('layout-sel').value = 'grid';
+      }
+
+      const curveStyle = isLarge ? 'straight' : 'bezier';
+
       cy = cytoscape({
         container: $('cy'),
         elements,
+        hideEdgesOnViewport: isLarge,
+        textureOnViewport: isLarge,
         style: [
-          { selector: 'node[type="table"]', style: { 'background-color': '#4a2d8b', 'label': 'data(label)', 'color': '#fff', 'font-size': '11px', 'text-valign': 'center', 'width': '60px', 'height': '60px', 'shape': 'ellipse' } },
-          { selector: 'node[type="sql_file"]', style: { 'background-color': '#2d6b4a', 'label': 'data(label)', 'color': '#fff', 'font-size': '9px', 'text-valign': 'center', 'shape': 'rectangle', 'width': '80px', 'height': '30px' } },
-          { selector: 'edge[type="join"]', style: { 'line-color': '#e94560', 'width': 2, 'target-arrow-shape': 'none', 'curve-style': 'bezier' } },
+          { selector: 'node[type="table"]', style: {
+            'background-color': '#4a2d8b', 'label': 'data(label)', 'color': '#fff',
+            'font-size': isLarge ? '8px' : '11px', 'text-valign': 'center',
+            'width': isLarge ? '36px' : '60px', 'height': isLarge ? '36px' : '60px', 'shape': 'ellipse',
+          }},
+          { selector: 'node[type="sql_file"]', style: {
+            'background-color': '#2d6b4a', 'label': isLarge ? '' : 'data(label)',
+            'color': '#fff', 'font-size': '9px', 'text-valign': 'center',
+            'shape': 'rectangle', 'width': isLarge ? '14px' : '80px', 'height': isLarge ? '14px' : '30px',
+          }},
+          { selector: 'edge[type="join"]', style: {
+            'line-color': '#e94560', 'width': isLarge ? 1 : 2,
+            'target-arrow-shape': 'none', 'curve-style': curveStyle,
+          }},
           { selector: 'edge[type="join"][has_fk]', style: { 'line-style': 'solid' } },
-          { selector: 'edge[type="read"]', style: { 'line-color': '#4a8b6b', 'width': 1, 'target-arrow-shape': 'triangle', 'target-arrow-color': '#4a8b6b', 'curve-style': 'bezier' } },
-          { selector: 'edge[type="write"]', style: { 'line-color': '#e9a020', 'width': 1, 'target-arrow-shape': 'triangle', 'target-arrow-color': '#e9a020', 'curve-style': 'bezier' } },
+          { selector: 'edge[type="read"]', style: {
+            'line-color': '#4a8b6b', 'width': 1,
+            'target-arrow-shape': isLarge ? 'none' : 'triangle',
+            'target-arrow-color': '#4a8b6b', 'curve-style': curveStyle,
+          }},
+          { selector: 'edge[type="write"]', style: {
+            'line-color': '#e9a020', 'width': 1,
+            'target-arrow-shape': isLarge ? 'none' : 'triangle',
+            'target-arrow-color': '#e9a020', 'curve-style': curveStyle,
+          }},
           { selector: ':selected', style: { 'border-width': 3, 'border-color': '#fff' } },
         ],
         layout: { name: $('layout-sel').value, padding: 40 },
       });
       cy.on('tap', 'node', e => showDetail(e.target.data()));
       cy.on('tap', 'edge', e => showEdgeDetail(e.target.data()));
+      updateStats();
+    }
+
+    function applyMinRefs() {
+      if (!fullElements) return;
+      const min = parseInt($('min-refs').value) || 1;
+
+      const visibleTableIds = new Set(
+        fullElements
+          .filter(e => !e.data.source && e.data.type === 'table' && (e.data.sql_file_count || 0) >= min)
+          .map(e => e.data.id)
+      );
+
+      const filtered = fullElements.filter(e => {
+        if (!e.data.source) {
+          return e.data.type === 'sql_file' || visibleTableIds.has(e.data.id);
+        }
+        const srcOk = e.data.source.startsWith('sql:') || visibleTableIds.has(e.data.source);
+        const tgtOk = e.data.target.startsWith('sql:') || visibleTableIds.has(e.data.target);
+        return srcOk && tgtOk;
+      });
+
+      initCytoscape(filtered);
+      applyFilter();
+    }
+
+    function updateStats() {
+      if (!cy || !fullElements) { $('stats-bar').textContent = ''; return; }
+      const totalNodes = fullElements.filter(e => !e.data.source).length;
+      const visNodes = cy.nodes().length;
+      const visEdges = cy.edges().length;
+      $('stats-bar').textContent =
+        `表示: ノード ${visNodes}件 / 全${totalNodes}件、エッジ ${visEdges}件`;
     }
 
     function showDetail(data) {
@@ -138,6 +215,7 @@
         const tgt = cy.getElementById(e.data('target'));
         e.style('display', src.style('display') !== 'none' && tgt.style('display') !== 'none' ? 'element' : 'none');
       });
+      updateStats();
     }
 
     function showWarnings(warnings) {
@@ -149,12 +227,41 @@
       bar.style.display = 'block';
     }
 
+    async function checkCache() {
+      try {
+        const info = await (await fetch('/api/cache')).json();
+        if (!info.exists) return;
+        $('cache-info').textContent = `前回の解析結果: ${info.cached_at}`;
+        $('cache-bar').style.display = 'flex';
+      } catch (_) {}
+    }
+
+    $('btn-load-cache').addEventListener('click', async () => {
+      $('cache-bar').style.display = 'none';
+      $('progress-bar').style.width = '50%';
+      const [graph, status] = await Promise.all([
+        fetch('/api/graph/cached').then(r => r.json()),
+        fetch('/api/status/cached').then(r => r.json()),
+      ]);
+      fullElements = [...graph.nodes, ...graph.edges];
+      showWarnings(status.warnings || []);
+      applyMinRefs();
+      $('progress-bar').style.width = '100%';
+    });
+
+    $('btn-clear-cache').addEventListener('click', async () => {
+      await fetch('/api/cache', { method: 'DELETE' });
+      $('cache-bar').style.display = 'none';
+    });
+
     $('search').addEventListener('input', applyFilter);
     $('filter-op').addEventListener('change', applyFilter);
     $('layout-sel').addEventListener('change', () => { if (cy) cy.layout({ name: $('layout-sel').value, padding: 40 }).run(); });
+    $('min-refs').addEventListener('change', applyMinRefs);
 
     $('btn-analyze').addEventListener('click', async () => {
       $('btn-analyze').disabled = true;
+      $('cache-bar').style.display = 'none';
       $('progress-bar').style.width = '10%';
       const resp = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       const { job_id } = await resp.json();
@@ -166,8 +273,9 @@
         if (s.state === 'completed') {
           clearInterval(pollTimer);
           const graph = await (await fetch(`/api/graph/${job_id}`)).json();
-          initCytoscape(graph);
+          fullElements = [...graph.nodes, ...graph.edges];
           showWarnings(s.warnings || []);
+          applyMinRefs();
           $('btn-analyze').disabled = false;
           $('progress-bar').style.width = '100%';
         } else if (s.state === 'error') {
@@ -177,6 +285,8 @@
         }
       }, 500);
     });
+
+    checkCache();
   </script>
 </body>
 </html>

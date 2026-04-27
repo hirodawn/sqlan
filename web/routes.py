@@ -1,5 +1,7 @@
+import json
 import logging
 import uuid
+from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from sqlalchemy import create_engine
@@ -10,6 +12,42 @@ from analyzer.graph_builder.builder import GraphBuilder
 from analyzer.models import AnalysisResult
 
 logger = logging.getLogger(__name__)
+
+CACHE_FILE = Path("sqlan_cache.json")
+
+
+def _save_cache(job: dict) -> None:
+    try:
+        CACHE_FILE.write_text(
+            json.dumps({
+                "graph": job["graph"],
+                "warnings": job.get("warnings", []),
+                "cached_at": datetime.now().isoformat(timespec="seconds"),
+            }, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        logger.info("解析結果をキャッシュしました: %s", CACHE_FILE)
+    except Exception:
+        logger.warning("キャッシュの保存に失敗しました", exc_info=True)
+
+
+def load_cache_job() -> dict | None:
+    if not CACHE_FILE.exists():
+        return None
+    try:
+        data = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+        logger.info("キャッシュを読み込みました: cached_at=%s", data.get("cached_at"))
+        return {
+            "state": "completed",
+            "progress": 100,
+            "graph": data["graph"],
+            "warnings": data.get("warnings", []),
+            "cached_at": data.get("cached_at", ""),
+        }
+    except Exception:
+        logger.warning("キャッシュの読み込みに失敗しました", exc_info=True)
+        return None
+
 
 def _run_analysis(job_id: str, config: dict, jobs: dict) -> None:
     try:
@@ -94,10 +132,12 @@ def _run_analysis(job_id: str, config: dict, jobs: dict) -> None:
         logger.info("[4/4] Graph Builder 完了: ノード %d件, エッジ %d件",
             len(graph["nodes"]), len(graph["edges"]))
         logger.info("解析完了 (job=%s)", job_id)
+        _save_cache(jobs[job_id])
     except Exception as e:
         jobs[job_id]["state"] = "error"
         jobs[job_id]["error"] = str(e)
         logger.exception("Analysis failed for job %s", job_id)
+
 
 def create_router() -> APIRouter:
     router = APIRouter()
@@ -105,6 +145,22 @@ def create_router() -> APIRouter:
     @router.get("/health")
     def health():
         return {"status": "ok"}
+
+    @router.get("/cache")
+    def get_cache_info():
+        if not CACHE_FILE.exists():
+            return {"exists": False}
+        try:
+            data = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+            return {"exists": True, "cached_at": data.get("cached_at", "")}
+        except Exception:
+            return {"exists": False}
+
+    @router.delete("/cache")
+    def clear_cache():
+        if CACHE_FILE.exists():
+            CACHE_FILE.unlink()
+        return {"cleared": True}
 
     @router.post("/analyze")
     def analyze(payload: dict, background_tasks: BackgroundTasks, request: Request):
@@ -124,6 +180,8 @@ def create_router() -> APIRouter:
             resp["error"] = job.get("error", "Unknown error")
         if job.get("warnings"):
             resp["warnings"] = job["warnings"]
+        if job.get("cached_at"):
+            resp["cached_at"] = job["cached_at"]
         return resp
 
     @router.get("/graph/{job_id}")
