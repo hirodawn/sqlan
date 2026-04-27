@@ -45,7 +45,6 @@ def test_extract_placeholders_empty_when_no_placeholders():
     result = extract_placeholders("SELECT * FROM employee WHERE employee_id = 1")
     assert result == {}
 
-def test_extract_placeholders_ignores_where_if_no_set():
+def test_extract_placeholders_captures_where_clause_col():
     result = extract_placeholders("SELECT * FROM t WHERE id = /*id*/1")
-    # WHERE clause placeholder is still captured (col name = "id")
     assert result.get("id") == "id"
