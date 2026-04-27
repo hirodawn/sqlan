@@ -1,6 +1,10 @@
+import logging
 from sqlalchemy import Engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from analyzer.models import TableInfo, ForeignKey
+
+logger = logging.getLogger(__name__)
+
 
 class DBInspector:
     def __init__(self, engine: Engine):
@@ -10,7 +14,8 @@ class DBInspector:
         try:
             with self.engine.connect() as conn:
                 return conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
-        except SQLAlchemyError:
+        except Exception as e:
+            logger.warning("get_row_count 失敗 [%s]: %s", table_name, e)
             return -1
 
     def get_column_cardinality(self, table_name: str, column_name: str) -> int:
@@ -50,17 +55,15 @@ class DBInspector:
     def _get_columns(self, insp, table_name: str) -> list[str]:
         # Oracle ではデータディクショナリのテーブル名が大文字で保存されるため、
         # 小文字名で失敗した場合は大文字でリトライする。
-        try:
-            cols = insp.get_columns(table_name)
-            if cols:
-                return [col["name"] for col in cols]
-        except SQLAlchemyError:
-            pass
-        try:
-            cols = insp.get_columns(table_name.upper())
-            return [col["name"] for col in cols]
-        except SQLAlchemyError:
-            return []
+        for lookup in [table_name, table_name.upper()]:
+            try:
+                cols = insp.get_columns(lookup)
+                if cols:
+                    logger.debug("_get_columns 成功 [%s] -> %d列", lookup, len(cols))
+                    return [col["name"] for col in cols]
+            except Exception as e:
+                logger.warning("_get_columns 失敗 [%s]: %s", lookup, e)
+        return []
 
     def get_table_info(self, table_name: str) -> TableInfo:
         # row_count=-1 は DB接続失敗またはテーブル不存在を表すセンチネル値。
@@ -68,7 +71,8 @@ class DBInspector:
         try:
             insp = inspect(self.engine)
             columns = self._get_columns(insp, table_name)
-        except SQLAlchemyError:
+        except Exception as e:
+            logger.warning("get_table_info inspect 失敗 [%s]: %s", table_name, e)
             columns = []
         return TableInfo(
             name=table_name,
