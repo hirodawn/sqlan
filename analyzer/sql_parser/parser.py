@@ -82,6 +82,7 @@ class SqlFileParser:
         if not isinstance(stmt, exp.Update):
             return
 
+        # S2JDBC SQL files contain a single statement per file; scanning full raw_sql is safe.
         placeholders = extract_placeholders(raw_sql)
         aliases = _collect_table_aliases(stmt)
 
@@ -101,6 +102,7 @@ class SqlFileParser:
             tgt_col = left.name.lower()
 
             if isinstance(right, exp.Column):
+                # Unqualified column (no table prefix) is assumed to belong to the target table.
                 src_alias = (right.table or "").lower() or target_alias
                 src_table = aliases.get(src_alias, src_alias) or target_name
                 src_col = right.name.lower()
