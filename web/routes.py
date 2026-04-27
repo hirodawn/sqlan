@@ -39,6 +39,12 @@ def _run_analysis(job_id: str, config: dict, jobs: dict) -> None:
                 if candidate.exists():
                     resolved = candidate
                     break
+            if resolved is None:
+                matches = list(sql_root.rglob(ref.sql_file))
+                if matches:
+                    resolved = matches[0]
+                    if len(matches) > 1:
+                        logger.warning("  複数のSQLファイルが見つかりました: %s → %s を使用", ref.sql_file, resolved)
             if resolved:
                 raw = resolved.read_text(encoding="utf-8", errors="ignore")
                 analysis = parser.parse(ref.sql_file, raw)
