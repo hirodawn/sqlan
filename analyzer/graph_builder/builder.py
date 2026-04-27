@@ -147,6 +147,9 @@ class GraphBuilder:
             for cu in analysis.column_updates:
                 if not cu.source_table:
                     continue
+                # 同一テーブル内コピーはノードのカラムメタデータに記録済みのためエッジ不要
+                if cu.source_table.lower() == cu.target_table.lower():
+                    continue
                 key = (cu.source_table, cu.source_column, cu.target_table, cu.target_column)
                 if key not in seen_copy:
                     src_col = cu.source_column.lower()
