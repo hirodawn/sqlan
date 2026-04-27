@@ -20,15 +20,23 @@ class GraphBuilder:
             for t in analysis.read_tables + analysis.write_tables:
                 sql_counts[t] = sql_counts.get(t, 0) + 1
 
-        # テーブルノード
-        for name, info in result.table_info.items():
+        # SQLファイルで参照された全テーブル名を収集（JOIN先も含む）
+        all_table_names: set[str] = set(sql_counts.keys())
+        for analysis in result.sql_analyses:
+            for join in analysis.joins:
+                all_table_names.add(join.left_table)
+                all_table_names.add(join.right_table)
+
+        # テーブルノード（DBデータがなくてもノードを生成する）
+        for name in sorted(all_table_names):
+            info = result.table_info.get(name)
             nodes.append({"data": {
                 "id": f"table:{name}",
                 "label": name,
                 "type": "table",
-                "row_count": info.row_count,
+                "row_count": info.row_count if info else -1,
                 "sql_file_count": sql_counts.get(name, 0),
-                "columns": info.columns,
+                "columns": info.columns if info else [],
             }})
 
         # SQLファイルノード（同一ファイルが複数解析結果に現れても1ノードのみ生成）
