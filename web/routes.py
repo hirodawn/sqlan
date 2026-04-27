@@ -35,6 +35,10 @@ def _run_analysis(job_id: str, config: dict, jobs: dict) -> None:
 
         # 3. DB Inspector
         if db_url:
+            # パスワードをマスクして記録（スキーム://ユーザー:***@ホスト/DB の形式）
+            import re as _re
+            masked = _re.sub(r'://([^:@]+):([^@]+)@', r'://\1:***@', db_url)
+            logger.info("Connecting to DB: %s", masked)
             engine = create_engine(db_url)
             inspector = DBInspector(engine)
             all_tables = {t for a in result.sql_analyses for t in a.read_tables + a.write_tables}
