@@ -5,6 +5,8 @@ sql_root  = "/path/to/java/project/src/main/resources"
 [database]
 url = "mysql+pymysql://user:password@localhost:3306/mydb"
 # url = "postgresql+psycopg2://user:password@localhost:5432/mydb"
+# Oracle (サービス名で接続する場合は ?service_name= を使う。/SID 形式は不可):
+# url = "oracle+oracledb://user:password@host:1521/?service_name=ORCL"
 # SQLiteでのテスト: "sqlite:///./test.db"
 
 [analysis]
