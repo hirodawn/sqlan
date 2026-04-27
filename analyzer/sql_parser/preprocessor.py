@@ -1,5 +1,18 @@
 import re
 
+_PLACEHOLDER_RE = re.compile(r'(\w+)\s*=\s*/\*(\w[\w.]*)\*/', re.IGNORECASE)
+
+def extract_placeholders(sql: str) -> dict[str, str]:
+    """
+    col = /*paramName*/value 形式のパターンをスキャンし
+    {column_name_lower: placeholder_name} を返す。
+    同じカラム名が複数回現れた場合は最後のものを採用。
+    """
+    result = {}
+    for m in _PLACEHOLDER_RE.finditer(sql):
+        result[m.group(1).lower()] = m.group(2)
+    return result
+
 def preprocess_2way_sql(sql: str) -> str:
     # Seasar2の特殊コメント /*...*/ を除去する。
     # /*IF*/, /*END*/, /*BEGIN*/, /*paramName*/ をすべてこの1パスで処理できる。

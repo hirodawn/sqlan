@@ -1,5 +1,5 @@
 from pathlib import Path
-from analyzer.sql_parser.preprocessor import preprocess_2way_sql
+from analyzer.sql_parser.preprocessor import preprocess_2way_sql, extract_placeholders
 import sqlglot
 
 FIXTURE_SQL = Path("tests/fixtures/select_employee.sql").read_text()
@@ -32,3 +32,20 @@ def test_fixture_contains_employee_table():
     result = preprocess_2way_sql(FIXTURE_SQL)
     tables = [t.name for stmt in sqlglot.parse(result) if stmt for t in stmt.find_all(exp.Table)]
     assert "employee" in tables
+
+def test_extract_placeholders_from_update():
+    # tests/fixtures/update_employee.sql contains:
+    # SET name = /*dto.name*/'test', department_id = /*dto.departmentId*/1
+    raw = Path("tests/fixtures/update_employee.sql").read_text()
+    result = extract_placeholders(raw)
+    assert result.get("name") == "dto.name"
+    assert result.get("department_id") == "dto.departmentId"
+
+def test_extract_placeholders_empty_when_no_placeholders():
+    result = extract_placeholders("SELECT * FROM employee WHERE employee_id = 1")
+    assert result == {}
+
+def test_extract_placeholders_ignores_where_if_no_set():
+    result = extract_placeholders("SELECT * FROM t WHERE id = /*id*/1")
+    # WHERE clause placeholder is still captured (col name = "id")
+    assert result.get("id") == "id"
