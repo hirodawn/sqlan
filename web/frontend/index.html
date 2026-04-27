@@ -102,6 +102,10 @@
 
     const $ = id => document.getElementById(id);
 
+    function escHtml(s) {
+      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     function buildErHtml(data) {
       const cols = data.columns || [];
       const rows = cols.map(c => {
@@ -109,12 +113,12 @@
         let suffix = '';
         if (c.is_join_key) cls = 'er-col-join';
         else if (c.is_update_target) cls = 'er-col-update';
-        if (c.placeholder_name) suffix = ` <span style="color:#888;font-size:9px;">/*${c.placeholder_name}*/</span>`;
-        if (c.update_source) suffix = ` <span style="color:#888;font-size:9px;">← ${c.update_source}</span>`;
+        if (c.placeholder_name) suffix = ` <span style="color:#888;font-size:9px;">/*${escHtml(c.placeholder_name)}*/</span>`;
+        if (c.update_source) suffix = ` <span style="color:#888;font-size:9px;">← ${escHtml(c.update_source)}</span>`;
         const icon = c.is_join_key ? '▶ ' : c.is_update_target ? '✏ ' : '  ';
-        return `<div class="er-col ${cls}">${icon}${c.name}${suffix}</div>`;
+        return `<div class="er-col ${cls}">${icon}${escHtml(c.name)}${suffix}</div>`;
       }).join('');
-      return `<div class="er-node"><div class="er-header">${data.label}</div>${rows}</div>`;
+      return `<div class="er-node"><div class="er-header">${escHtml(data.label)}</div>${rows}</div>`;
     }
 
     function computeNodeSize(data) {
@@ -142,8 +146,6 @@
         e.data.node_width = w;
         e.data.node_height = h;
       });
-
-      cytoscape.use(cytoscapeNodeHtmlLabel);
 
       cy = cytoscape({
         container: $('cy'),
@@ -299,16 +301,16 @@
           const cls = c.is_join_key ? 'col-join' : c.is_update_target ? 'col-update' : '';
           const icon = c.is_join_key ? '▶ ' : c.is_update_target ? '✏ ' : '';
           let extra = '';
-          if (c.placeholder_name) extra = ` <small style="color:#888;">/*${c.placeholder_name}*/</small>`;
-          if (c.update_source) extra = ` <small style="color:#888;">← ${c.update_source}</small>`;
-          return `<span class="col-list-item ${cls}">${icon}${c.name}${extra}</span>`;
+          if (c.placeholder_name) extra = ` <small style="color:#888;">/*${escHtml(c.placeholder_name)}*/</small>`;
+          if (c.update_source) extra = ` <small style="color:#888;">← ${escHtml(c.update_source)}</small>`;
+          return `<span class="col-list-item ${cls}">${icon}${escHtml(c.name)}${extra}</span>`;
         }).join('');
         const sqlHtml = (data.sql_files || []).map(f =>
-          `<span class="sql-file-ref">📄 ${f}</span>`
+          `<span class="sql-file-ref">📄 ${escHtml(f)}</span>`
         ).join('');
         html = `
           <div class="detail-row"><div class="detail-label">種別</div><span class="badge badge-table">テーブル</span></div>
-          <div class="detail-row"><div class="detail-label">名前</div>${data.label}</div>
+          <div class="detail-row"><div class="detail-label">名前</div>${escHtml(data.label)}</div>
           <div class="detail-row"><div class="detail-label">行数</div>${data.row_count >= 0 ? data.row_count.toLocaleString() : '不明'}</div>
           <div class="detail-row"><div class="detail-label">カラム</div>${colHtml || '不明'}</div>
           <div class="detail-row"><div class="detail-label">参照SQL (${(data.sql_files || []).length}件)</div>${sqlHtml || 'なし'}</div>`;
@@ -317,30 +319,30 @@
         const badgeClass = { SELECT: 'badge-select', UPDATE: 'badge-update', INSERT: 'badge-insert' }[op] || 'badge-unknown';
         html = `
           <div class="detail-row"><div class="detail-label">種別</div>SQLファイル</div>
-          <div class="detail-row"><div class="detail-label">ファイル名</div>${data.label}</div>
+          <div class="detail-row"><div class="detail-label">ファイル名</div>${escHtml(data.label)}</div>
           <div class="detail-row"><div class="detail-label">操作</div><span class="badge ${badgeClass}">${op}</span></div>
-          <div class="detail-row"><div class="detail-label">呼び出しクラス</div>${data.calling_class || '不明'}</div>
-          <div class="detail-row"><div class="detail-label">呼び出しメソッド</div>${data.calling_method || '不明'}</div>
-          <div class="detail-row"><div class="detail-label">パス</div><small>${data.sql_file || ''}</small></div>`;
+          <div class="detail-row"><div class="detail-label">呼び出しクラス</div>${escHtml(data.calling_class || '不明')}</div>
+          <div class="detail-row"><div class="detail-label">呼び出しメソッド</div>${escHtml(data.calling_method || '不明')}</div>
+          <div class="detail-row"><div class="detail-label">パス</div><small>${escHtml(data.sql_file || '')}</small></div>`;
       }
       $('detail-body').innerHTML = html;
     }
 
     function showEdgeDetail(data) {
-      let html = `<div class="detail-row"><div class="detail-label">エッジ種別</div>${data.type}</div>`;
+      let html = `<div class="detail-row"><div class="detail-label">エッジ種別</div>${escHtml(data.type)}</div>`;
       if (data.type === 'join') {
         html += `
-          <div class="detail-row"><div class="detail-label">結合条件</div><code>${data.left_column} = ${data.right_column}</code></div>
+          <div class="detail-row"><div class="detail-label">結合条件</div><code>${escHtml(data.left_column)} = ${escHtml(data.right_column)}</code></div>
           <div class="detail-row"><div class="detail-label">FK制約</div>${data.has_fk ? '<span class="badge badge-fk">あり</span>' : 'なし'}</div>`;
       } else if (data.type === 'column_copy') {
         const src = (data.source || '').replace('table:', '');
         const tgt = (data.target || '').replace('table:', '');
         html += `
-          <div class="detail-row"><div class="detail-label">コピー元</div><code>${src}.${data.source_column}</code></div>
-          <div class="detail-row"><div class="detail-label">コピー先</div><code>${tgt}.${data.target_column}</code></div>`;
+          <div class="detail-row"><div class="detail-label">コピー元</div><code>${escHtml(src)}.${escHtml(data.source_column)}</code></div>
+          <div class="detail-row"><div class="detail-label">コピー先</div><code>${escHtml(tgt)}.${escHtml(data.target_column)}</code></div>`;
       }
       if (data.sql_files && data.sql_files.length > 0) {
-        const sqlHtml = data.sql_files.map(f => `<span class="sql-file-ref">📄 ${f}</span>`).join('');
+        const sqlHtml = data.sql_files.map(f => `<span class="sql-file-ref">📄 ${escHtml(f)}</span>`).join('');
         html += `<div class="detail-row"><div class="detail-label">SQL ファイル (${data.sql_files.length}件)</div>${sqlHtml}</div>`;
       }
       $('detail-body').innerHTML = html;
@@ -350,7 +352,7 @@
       const bar = $('warn-bar');
       if (!warnings || warnings.length === 0) { bar.style.display = 'none'; return; }
       $('warn-summary').textContent = `⚠ SQLファイルが見つかりませんでした: ${warnings.length}件（クリックで詳細表示）`;
-      $('warn-list').innerHTML = warnings.map(w => `<li>${w.replace(/</g, '&lt;')}</li>`).join('');
+      $('warn-list').innerHTML = warnings.map(w => `<li>${escHtml(w)}</li>`).join('');
       bar.style.display = 'block';
     }
 
@@ -398,24 +400,31 @@
       currentJobId = job_id;
       if (pollTimer) clearInterval(pollTimer);
       pollTimer = setInterval(async () => {
-        const s = await (await fetch(`/api/status/${job_id}`)).json();
-        $('progress-bar').style.width = (s.progress || 0) + '%';
-        if (s.state === 'completed') {
+        try {
+          const s = await (await fetch(`/api/status/${job_id}`)).json();
+          $('progress-bar').style.width = (s.progress || 0) + '%';
+          if (s.state === 'completed') {
+            clearInterval(pollTimer);
+            const graph = await (await fetch(`/api/graph/${job_id}`)).json();
+            fullElements = [...graph.nodes, ...graph.edges];
+            showWarnings(s.warnings || []);
+            applyMinRefs();
+            $('btn-analyze').disabled = false;
+            $('progress-bar').style.width = '100%';
+          } else if (s.state === 'error') {
+            clearInterval(pollTimer);
+            alert('解析に失敗しました。\n\n' + (s.error || '詳細不明'));
+            $('btn-analyze').disabled = false;
+          }
+        } catch (err) {
           clearInterval(pollTimer);
-          const graph = await (await fetch(`/api/graph/${job_id}`)).json();
-          fullElements = [...graph.nodes, ...graph.edges];
-          showWarnings(s.warnings || []);
-          applyMinRefs();
-          $('btn-analyze').disabled = false;
-          $('progress-bar').style.width = '100%';
-        } else if (s.state === 'error') {
-          clearInterval(pollTimer);
-          alert('解析に失敗しました。\n\n' + (s.error || '詳細不明'));
+          alert('通信エラーが発生しました。');
           $('btn-analyze').disabled = false;
         }
       }, 500);
     });
 
+    cytoscape.use(cytoscapeNodeHtmlLabel);
     checkCache();
   </script>
 </body>
