@@ -1,6 +1,7 @@
 from analyzer.models import (
     SqlReference, SqlAnalysis, JoinInfo,
     TableInfo, ForeignKey, ColumnCardinality, AnalysisResult,
+    ColumnUpdate,
 )
 
 def test_sql_reference_fields():
@@ -29,3 +30,34 @@ def test_sql_analysis_defaults():
     assert a.write_tables == []
     assert a.joins == []
     assert a.parse_error is None
+
+def test_column_update_defaults():
+    cu = ColumnUpdate(sql_file="x.sql", target_table="employee", target_column="name")
+    assert cu.source_table is None
+    assert cu.source_column is None
+    assert cu.placeholder_name is None
+
+def test_column_update_with_placeholder():
+    cu = ColumnUpdate(
+        sql_file="x.sql",
+        target_table="employee",
+        target_column="name",
+        placeholder_name="dto.name",
+    )
+    assert cu.placeholder_name == "dto.name"
+    assert cu.source_table is None
+
+def test_column_update_with_source():
+    cu = ColumnUpdate(
+        sql_file="x.sql",
+        target_table="employee",
+        target_column="name",
+        source_table="department",
+        source_column="department_name",
+    )
+    assert cu.source_table == "department"
+    assert cu.source_column == "department_name"
+
+def test_sql_analysis_has_column_updates():
+    a = SqlAnalysis(sql_file="test.sql")
+    assert a.column_updates == []

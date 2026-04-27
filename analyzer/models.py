@@ -17,11 +17,21 @@ class JoinInfo:
     right_column: str
 
 @dataclass
+class ColumnUpdate:
+    sql_file: str
+    target_table: str
+    target_column: str
+    source_table: str | None = None
+    source_column: str | None = None
+    placeholder_name: str | None = None
+
+@dataclass
 class SqlAnalysis:
     sql_file: str
     read_tables: list[str] = field(default_factory=list)
     write_tables: list[str] = field(default_factory=list)
     joins: list[JoinInfo] = field(default_factory=list)
+    column_updates: list[ColumnUpdate] = field(default_factory=list)
     parse_error: str | None = None
 
 @dataclass
